@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import GameContext from './GameContext';
 
 export const useGameLogic = () => {
     const [clicks, setClicks] = useState(0);
@@ -14,6 +15,7 @@ export const useGameLogic = () => {
     const [baseCustomerFlow, setBaseCustomerFlow] = useState(1);
     const [achievements, setAchievements] = useState([]);
     const [customerFeedback, setCustomerFeedback] = useState([]);
+    const [outOfStockWarning, setOutOfStockWarning] = useState('');
 
     const dailyExpenses = 100;
 
@@ -98,7 +100,6 @@ export const useGameLogic = () => {
         setInventory(currentBusiness.inventory);
         setStoreUpgrades(currentBusiness.storeUpgrades);
         setBaseCustomerFlow(1); // Reset base customer flow to 1 on stage change
-        updateCustomerFlowAndRating(); // Recalculate flow and rating based on upgrades
     }, [businessStage]);
 
     useEffect(() => {
@@ -125,22 +126,22 @@ export const useGameLogic = () => {
                 setEvent(randomEvent);
                 setTimeout(() => setEvent(null), randomEvent.duration);
             }
-        }, 1000);
+        }, 10000); // Reduced frequency to avoid frequent updates
 
         return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        storyline.forEach((story) => {
-            if (story.trigger === "start" || (story.trigger === "upgrade" && currentBusiness.name === story.stage)) {
-                setEvent({ message: story.message, duration: 5000 });
-            }
-        });
-    }, [currentBusiness]);
+        if (businessStage === 0) {
+            setEvent({ message: "Welcome to Lagos! Start your journey as a street vendor.", duration: 5000 });
+        } else if (businessStage === 1 && currentBusiness.name === "Buka") {
+            setEvent({ message: "Congratulations! You've upgraded to a Buka.", duration: 5000 });
+        }
+    }, [businessStage]);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            setMoney((prevMoney) => prevMoney - dailyExpenses);
+            setMoney(prevMoney => prevMoney - dailyExpenses);
         }, 86400000); // Deduct expenses every 24 hours
 
         return () => clearInterval(interval);
@@ -161,9 +162,9 @@ export const useGameLogic = () => {
                 : `${customer.type} customers are not happy! Rating decreased.`;
             const ratingChange = positiveFeedback ? customer.satisfactionImpact : -customer.satisfactionImpact;
 
-            setCustomerRating((prevRating) => Math.max(0, Math.min(5, prevRating + ratingChange)));
+            setCustomerRating(prevRating => Math.max(0, Math.min(5, prevRating + ratingChange)));
 
-            setCustomerFeedback((prevFeedback) => [
+            setCustomerFeedback(prevFeedback => [
                 ...prevFeedback, 
                 { message: feedbackMessage, timestamp: Date.now() }
             ]);
@@ -180,9 +181,11 @@ export const useGameLogic = () => {
     };
 
     const handleClick = (itemIndex) => {
-        setInventory((prevInventory) => {
+        setInventory(prevInventory => {
             const item = prevInventory[itemIndex];
             if (item.quantity > 0) {
+                setMoney(prevMoney => prevMoney + item.price * customerFlow);
+                setClicks(prevClicks => prevClicks + 1);
                 updateMissions("sell", item.name, 1);
                 return [
                     ...prevInventory.slice(0, itemIndex),
@@ -190,18 +193,18 @@ export const useGameLogic = () => {
                     ...prevInventory.slice(itemIndex + 1),
                 ];
             } else {
+                setOutOfStockWarning(`You are out of stock for ${item.name}!`);
+                setTimeout(() => setOutOfStockWarning(''), 3000); // Clear warning after 3 seconds
                 return prevInventory;
             }
         });
-        setMoney(money + currentBusiness.inventory[itemIndex].price * customerFlow);
-        setClicks(clicks + 1);
     };
 
     const restockItem = (itemIndex) => {
-        setInventory((prevInventory) => {
+        setInventory(prevInventory => {
             const item = prevInventory[itemIndex];
             if (money >= item.restockCost) {
-                setMoney(money - item.restockCost);
+                setMoney(prevMoney => prevMoney - item.restockCost);
                 return [
                     ...prevInventory.slice(0, itemIndex),
                     { ...item, quantity: item.quantity + 10 }, // Restock 10 units
@@ -217,8 +220,8 @@ export const useGameLogic = () => {
     const upgradeBusiness = () => {
         const cost = currentBusiness.upgradeCost;
         if (money >= cost) {
-            setMoney(money - cost);
-            setBusinessStage((prevStage) => Math.min(prevStage + 1, businessStages.length - 1));
+            setMoney(prevMoney => prevMoney - cost);
+            setBusinessStage(prevStage => Math.min(prevStage + 1, businessStages.length - 1));
         } else {
             alert("You don't have enough money for this upgrade!");
         }
@@ -226,16 +229,16 @@ export const useGameLogic = () => {
 
     const buyStoreUpgrade = (upgrade) => {
         if (money >= upgrade.cost) {
-            setMoney(money - upgrade.cost);
-            setStoreUpgrades((prevUpgrades) => [...prevUpgrades, upgrade]);
+            setMoney(prevMoney => prevMoney - upgrade.cost);
+            setStoreUpgrades(prevUpgrades => [...prevUpgrades, upgrade]);
 
             // Apply upgrade effect immediately
             switch (upgrade.effect) {
                 case "increaseCustomerFlow":
-                    setCustomerFlow((prevFlow) => prevFlow + upgrade.value);
+                    setCustomerFlow(prevFlow => prevFlow + upgrade.value);
                     break;
                 case "increaseCustomerSatisfaction":
-                    setCustomerRating((prevRating) => Math.min(5, prevRating + upgrade.value / 10));
+                    setCustomerRating(prevRating => Math.min(5, prevRating + upgrade.value / 10));
                     break;
                 default:
                     break;
@@ -260,13 +263,13 @@ export const useGameLogic = () => {
     };
 
     const updateMissions = (type, item, value) => {
-        setActiveMissions((prevMissions) =>
-            prevMissions.map((mission) => {
+        setActiveMissions(prevMissions =>
+            prevMissions.map(mission => {
                 if (mission.type === type && (!item || mission.item === item)) {
                     mission.progress = (mission.progress || 0) + value;
                     if (mission.progress >= mission.goal) {
-                        setCompletedMissions((prevCompleted) => [...prevCompleted, mission]);
-                        setMoney((prevMoney) => prevMoney + mission.reward);
+                        setCompletedMissions(prevCompleted => [...prevCompleted, mission]);
+                        setMoney(prevMoney => prevMoney + mission.reward);
                         return null;
                     }
                 }
@@ -277,13 +280,13 @@ export const useGameLogic = () => {
 
     const takeLoan = (amount, interestRate) => {
         const loan = { amount, interestRate, id: Date.now() };
-        setLoans((prevLoans) => [...prevLoans, loan]);
-        setMoney((prevMoney) => prevMoney + amount);
+        setLoans(prevLoans => [...prevLoans, loan]);
+        setMoney(prevMoney => prevMoney + amount);
     };
 
     const repayLoan = (loanId) => {
-        setLoans((prevLoans) => prevLoans.filter((loan) => loan.id !== loanId));
-        setMoney((prevMoney) => prevMoney - loans.find((loan) => loan.id === loanId).amount);
+        setLoans(prevLoans => prevLoans.filter(loan => loan.id !== loanId));
+        setMoney(prevMoney => prevMoney - loans.find(loan => loan.id === loanId).amount);
     };
 
     const checkAchievements = () => {
@@ -298,7 +301,7 @@ export const useGameLogic = () => {
         }
 
         if (newAchievements.length > 0) {
-            setAchievements([...achievements, ...newAchievements]);
+            setAchievements(prevAchievements => [...prevAchievements, ...newAchievements]);
             setEvent({ message: `Achievements unlocked: ${newAchievements.join(", ")}`, duration: 5000 });
         }
     };
@@ -329,5 +332,6 @@ export const useGameLogic = () => {
         dailyExpenses,
         customerTypes,
         customerFeedback,
+        outOfStockWarning,
     };
 };
