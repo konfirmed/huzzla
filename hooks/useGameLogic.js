@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import GameContext from './GameContext';
 
 export const useGameLogic = () => {
     const [clicks, setClicks] = useState(0);
