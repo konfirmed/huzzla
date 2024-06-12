@@ -37,7 +37,6 @@ export default function Home() {
         <Layout>
             <div className="flex flex-col items-center gap-8 p-8 max-w-3xl mx-auto">
                 <div className="text-center">
-                    <h1 className="text-4xl font-bold">Lagos Hustle</h1>
                     <p className="text-gray-500">
                         {business === "Street Vendor"
                             ? "You are a street vendor in Lagos, Nigeria."
